@@ -8,20 +8,20 @@
 #include <vector>
 #include "config.h"
 
-// Cấu trúc Lời bài hát (Synced Lyrics)
+// Synced Lyrics structure
 struct LyricLine {
   long time_ms;
   String text;
 };
 
-// Khai báo Mutex Dual-Core
+// Dual-Core Mutex declaration
 extern SemaphoreHandle_t dataMutex;
 
-// Khai báo đối tượng màn hình TFT
+// TFT Display Objects
 extern Adafruit_ILI9341 tft1;
 extern Adafruit_ST7735  tft2;
 
-// Khai báo biến trạng thái Spotify & Track
+// Spotify & Track State Variables
 extern String access_token;
 extern unsigned long token_expires_at;
 
@@ -34,14 +34,14 @@ extern long duration_ms;
 extern bool is_playing;
 extern unsigned long last_progress_tick;
 
-// Buffer tải ảnh bìa Album
+// Album cover download buffer
 extern std::vector<uint8_t> rawCoverBuffer;
 extern bool newCoverAvailable;
 extern bool cover_loaded_tft2;
 extern bool tft2_title_dirty;
 extern bool pending_track_change;
 
-// Lời bài hát
+// Lyrics state
 extern LyricLine lyrics[MAX_LYRICS];
 extern int lyrics_count;
 extern int current_lyric_idx;

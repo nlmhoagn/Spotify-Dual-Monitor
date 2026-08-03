@@ -11,7 +11,7 @@
 #include "ui_renderer.h"
 
 // -------------------------------------------------------------
-// KHỞI TẠO HỆ THỐNG (CORE 1)
+// SYSTEM INITIALIZATION (CORE 1)
 // -------------------------------------------------------------
 void setup() {
   Serial.begin(115200);
@@ -34,7 +34,7 @@ void setup() {
   TJpgDec.setJpgScale(4);
   TJpgDec.setSwapBytes(false);
 
-  // Khởi tạo trạng thái sóng nhạc EQ
+  // Initialize EQ visualizer state
   for (int i = 0; i < 10; i++) {
     eqH[i] = random(4, 18);
     eqT[i] = random(4, 18);
@@ -47,7 +47,7 @@ void setup() {
     Serial.println("\n[WIFI] Connected!");
     refreshSpotifyToken();
 
-    // Khởi tạo Task mạng Spotify chạy nền trên Core 0
+    // Initialize background Spotify network task on Core 0
     xTaskCreatePinnedToCore(
       spotifyNetworkTask,
       "SpotifyTask",
@@ -61,12 +61,12 @@ void setup() {
 }
 
 // -------------------------------------------------------------
-// VÒNG LẶP CHÍNH (CORE 1 RENDER CẢ 2 MÀN HÌNH MƯỢT MÀ)
+// MAIN LOOP (CORE 1 RENDERS BOTH DISPLAYS SMOOTHLY)
 // -------------------------------------------------------------
 void loop() {
   unsigned long now = millis();
 
-  // 1. Nội suy thời gian phát nhạc mượt mà trên Core 1
+  // 1. Smooth playback time interpolation on Core 1
   xSemaphoreTake(dataMutex, portMAX_DELAY);
   if (is_playing) {
     unsigned long elapsed = now - last_progress_tick;
@@ -78,11 +78,11 @@ void loop() {
   }
   xSemaphoreGive(dataMutex);
 
-  // 2. Render đĩa vinyl & metadata lên Màn Nhỏ ST7735
+  // 2. Render vinyl disc & metadata on ST7735 display
   renderAlbumCoverOnCore1();
   updateScreen2Dynamic();
 
-  // 3. Render giao diện Spotify & Lyrics Karaoke lên Màn Lớn ILI9341
+  // 3. Render Spotify UI & Karaoke Lyrics on ILI9341 display
   updateScreen1();
 
   delay(15);

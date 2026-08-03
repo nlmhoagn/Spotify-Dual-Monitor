@@ -5,7 +5,7 @@
 #include <TJpg_Decoder.h>
 
 // -------------------------------------------------------------
-// GIAO DIỆN MÀN NHỎ ST7735 (160x128) - BÌA ALBUM 75x75 CHÍNH GIỮA
+// SECONDARY DISPLAY ST7735 (160x128) - ALBUM COVER & VINYL DISC
 // -------------------------------------------------------------
 void renderAlbumCoverOnCore1() {
   std::vector<uint8_t> localBuffer;
@@ -24,7 +24,7 @@ void renderAlbumCoverOnCore1() {
     digitalWrite(TFT2_CS, LOW);
     tft2.fillScreen(ST77XX_BLACK);
 
-    // 1. Header màn nhỏ: Nền xám đậm DARK + NOW PLAYING sát trái (X: 6) + @nlmhoagn sát phải (X: 100)
+    // 1. Small display header: DARK background + NOW PLAYING (left) + username (right)
     tft2.fillRect(0, 0, 160, 18, DARK);
     tft2.setTextSize(1);
     tft2.setTextColor(SPGREEN, DARK);
@@ -36,10 +36,10 @@ void renderAlbumCoverOnCore1() {
     tft2.setCursor(100, 5);
     tft2.print("@nlmhoagn");
 
-    // 2. Clear vùng đĩa than trước khi vẽ
+    // 2. Clear vinyl area before drawing
     tft2.fillRect(40, 20, 80, 78, ST77XX_BLACK);
 
-    // 3. Decode & lưu Bìa Album vào Label đĩa than tròn (Tâm X: 80, Y: 58)
+    // 3. Decode & store Album Cover into circular Vinyl Label (Center X: 80, Y: 58)
     if (localBuffer.size() > 1000) {
       TJpgDec.setJpgScale(4);
       TJpgDec.setSwapBytes(false);
@@ -232,7 +232,7 @@ void updateScreen2Dynamic() {
 }
 
 // -------------------------------------------------------------
-// GIAO DIỆN NGANG CHO MÀN LỚN ILI9341 (320x240)
+// LANDSCAPE UI FOR MAIN DISPLAY ILI9341 (320x240)
 // -------------------------------------------------------------
 void drawHeader() {
   tft1.fillRect(0, 0, 320, 32, DARK);

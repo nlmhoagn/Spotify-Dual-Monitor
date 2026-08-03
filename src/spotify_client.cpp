@@ -6,7 +6,7 @@
 #include <ArduinoJson.h>
 
 // -------------------------------------------------------------
-// REFRESH SPOTIFY TOKEN (CHẠY NỀN TRÊN CORE 0)
+// REFRESH SPOTIFY TOKEN (BACKGROUND TASK ON CORE 0)
 // -------------------------------------------------------------
 bool refreshSpotifyToken() {
   if (WiFi.status() != WL_CONNECTED) return false;
@@ -46,7 +46,7 @@ bool refreshSpotifyToken() {
 }
 
 // -------------------------------------------------------------
-// TẢI FILE BÌA ALBUM VỀ RAM (HTTPS WIFICLIENTSECURE)
+// DOWNLOAD ALBUM COVER TO RAM (HTTPS WIFICLIENTSECURE)
 // -------------------------------------------------------------
 void downloadCoverImageToRAM(String imageUrl) {
   if (imageUrl.length() == 0 || WiFi.status() != WL_CONNECTED) {
@@ -102,7 +102,7 @@ void downloadCoverImageToRAM(String imageUrl) {
 }
 
 // -------------------------------------------------------------
-// GỌI SPOTIFY API LẤY TRẠNG THÁI PHÁT NHẠC (CORE 0)
+// FETCH SPOTIFY CURRENTLY PLAYING STATE (CORE 0)
 // -------------------------------------------------------------
 bool getCurrentlyPlaying() {
   if (WiFi.status() != WL_CONNECTED) return false;
@@ -223,7 +223,7 @@ bool getCurrentlyPlaying() {
 }
 
 // -------------------------------------------------------------
-// TASK CHẠY NỀN TRÊN CORE 0 (MẠNG SPOTIFY)
+// BACKGROUND NETWORK TASK ON CORE 0 (SPOTIFY API & LYRICS)
 // -------------------------------------------------------------
 void spotifyNetworkTask(void *pvParameters) {
   for (;;) {

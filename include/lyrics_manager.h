@@ -8,24 +8,24 @@
 // URL Encoder
 String urlEncode(const String& str);
 
-// Động cơ chuyển đổi Tiếng Việt bỏ dấu & Âm tiết Hàn Quốc (Hangul) sang Romaja Latin
+// Vietnamese diacritics removal & K-Pop Hangul to Romaja Latin converter
 String removeVietnameseAccents(String str);
 
-// Lọc tiêu đề bài hát (bỏ phụ đề)
+// Clean track title (strip subtitles/extra tags)
 String cleanTrackNameForLyrics(String title);
 
-// Phân tách câu dài thành nhiều đoạn ngắn vừa màn hình
+// Split long lyric line into shorter parts to fit screen
 std::vector<String> splitLyricLineToParts(const String& input, int maxChars = 25);
 
-// Phân tích file LRC
+// Parse LRC file
 void parseLRC(String lrcContent);
 
-// Tải Lyrics qua LRCLIB API 6 tầng
+// Fetch lyrics via 6-tier LRCLIB API
 bool fetchSingleLyrics(String url);
 bool fetchSearchLyrics(String url);
 void fetchLyrics(String track, String artist, long duration);
 
-// Render Lyrics 3 dòng mượt mà trên Màn Lớn ILI9341
+// Smooth 3-line Karaoke Lyrics renderer on ILI9341 Main Display
 void updateLyricsSpotifyKaraoke3Line();
 
 #endif // LYRICS_MANAGER_H

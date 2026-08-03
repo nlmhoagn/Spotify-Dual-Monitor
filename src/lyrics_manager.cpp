@@ -31,7 +31,7 @@ String urlEncode(const String& str) {
 }
 
 // -------------------------------------------------------------
-// TIẾNG VIỆT BỎ DẤU & K-POP HANGUL TO ROMAJA LATIN ENGINE
+// VIETNAMESE DIACRITICS REMOVAL & K-POP HANGUL TO ROMAJA LATIN ENGINE
 // -------------------------------------------------------------
 String removeVietnameseAccents(String str) {
   static const char* INITIALS[19] = {

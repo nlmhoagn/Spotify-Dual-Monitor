@@ -2,13 +2,13 @@
 #include <TJpg_Decoder.h>
 #include <math.h>
 
-// Bộ đệm ảnh bìa Album tròn 60x60
+// Buffer for 60x60 circular Album Cover label
 static uint16_t coverLabelBuffer[60 * 60];
 static uint16_t tempCover75[75 * 75];
 static bool labelBufferValid = false;
 
 // -------------------------------------------------------------
-// VẼ LOGO SPOTIFY TỪ MẢNG ẢNH BỘ NHỚ PROGMEM
+// DRAW SPOTIFY LOGO FROM PROGMEM IMAGE ARRAY
 // -------------------------------------------------------------
 void drawSpotifyLogo(Adafruit_GFX &gfx, int cx, int cy, int r, uint16_t bgCol) {
   const uint16_t* logoArray = NULL;
@@ -43,7 +43,7 @@ void drawSpotifyLogo(Adafruit_GFX &gfx, int cx, int cy, int r, uint16_t bgCol) {
 }
 
 // -------------------------------------------------------------
-// THU NHỎ & XOAY ĐĨA THAN VINYL 76px
+// SCALE & ROTATE 76px VINYL DISC
 // -------------------------------------------------------------
 void prepareFallbackLabelBuffer() {
   for (int y = 0; y < 60; y++) {
@@ -104,20 +104,20 @@ void renderRotatedVinylDisc(float angle) {
       int distSq = dx * dx + dy * dy;
 
       if (distSq <= 9) {
-        lineBuf[idx] = ST77XX_BLACK; // Lỗ trục đĩa (r=3)
-      } else if (distSq <= 900) { // Label Bìa Album tròn (r=30, D=60px)
+        lineBuf[idx] = ST77XX_BLACK; // Spindle hole (r=3)
+      } else if (distSq <= 900) { // Circular Album Cover Label (r=30, D=60px)
         int sx = 30 + ((dx * cos_fp + dy_sin) >> 8);
         int sy = 30 + ((-dx * sin_fp + dy_cos) >> 8);
         if (sx < 0) sx = 0; else if (sx >= 60) sx = 59;
         if (sy < 0) sy = 0; else if (sy >= 60) sy = 59;
 
         lineBuf[idx] = coverLabelBuffer[sy * 60 + sx];
-      } else if (distSq <= 1444) { // Vành đĩa đen Vinyl tròn (r=38, D=76px)
+      } else if (distSq <= 1444) { // Outer Black Vinyl Ring (r=38, D=76px)
         int dist = (int)sqrt((float)distSq);
         if (dist == 38 || dist == 35 || dist == 32) {
-          lineBuf[idx] = 0x3186; // Vành rãnh xám
+          lineBuf[idx] = 0x3186; // Groove line gray
         } else {
-          lineBuf[idx] = 0x1082; // Nền đĩa đen Vinyl
+          lineBuf[idx] = 0x1082; // Black Vinyl body
         }
       } else {
         lineBuf[idx] = ST77XX_BLACK;
