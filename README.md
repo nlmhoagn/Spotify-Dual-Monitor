@@ -4,6 +4,18 @@ A feature-rich, dual-display Spotify music player powered by ESP32-S3 and FreeRT
 
 ---
 
+## 🧰 Hardware & Components Required
+
+| Component | Model / Specification | Description |
+| :--- | :--- | :--- |
+| **Microcontroller** | ESP32-S3 Development Board | Dual-Core Xtensa LX7, 2.4GHz Wi-Fi, 8MB Flash (PSRAM recommended) |
+| **Main Display (Display 1)** | ILI9341 2.8" SPI TFT LCD (320x240) | Renders Spotify UI, track info, progress bar, audio EQ & 3-line Karaoke lyrics |
+| **Secondary Display (Display 2)** | ST7735 1.44" / 1.8" SPI TFT LCD (160x128) | Renders rotating 76px vinyl record with decoded album cover art |
+| **Power Supply** | USB Type-C Cable (5V / 1A+) | Powers the ESP32-S3 board and both TFT LCD backlight displays |
+| **Wiring** | DuPont Jumper Wires / Breadboard | For SPI bus and control pin interconnections |
+
+---
+
 ## ✨ Features
 
 - **Dual Display Architecture**: Driven over a shared SPI bus using chip-select multiplexing.
