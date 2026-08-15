@@ -1,6 +1,6 @@
 # ESP32-S3 Spotify Dual-Monitor & Karaoke Lyrics Player
 
-A feature-rich, dual-display Spotify music player powered by ESP32-S3 and FreeRTOS. It streams real-time Spotify playback status, renders live synced Karaoke lyrics on a main ILI9341 display, and displays a rotating vinyl album cover on a secondary ST7735 display.
+A feature-rich, dual-display Spotify music player and smart desktop companion powered by ESP32-S3 and FreeRTOS. It streams real-time Spotify playback status, renders live synced Karaoke lyrics on a main ILI9341 display, displays a rotating vinyl album cover on a secondary ST7735 display, and includes physical button controls, an on-device Web Control Dashboard, and a Captive Portal Wi-Fi setup manager.
 
 ---
 
@@ -9,22 +9,33 @@ A feature-rich, dual-display Spotify music player powered by ESP32-S3 and FreeRT
 | Component | Model / Specification | Description |
 | :--- | :--- | :--- |
 | **Microcontroller** | ESP32-S3 Development Board | Dual-Core Xtensa LX7, 2.4GHz Wi-Fi, 8MB Flash (PSRAM recommended) |
-| **Main Display (Display 1)** | ILI9341 2.8" SPI TFT LCD (320x240) | Renders Spotify UI, track info, progress bar, audio EQ & 3-line Karaoke lyrics |
-| **Secondary Display (Display 2)** | ST7735 1.44" / 1.8" SPI TFT LCD (160x128) | Renders rotating 76px vinyl record with decoded album cover art |
-| **Power Supply** | USB Type-C Cable (5V / 1A+) | Powers the ESP32-S3 board and both TFT LCD backlight displays |
-| **Wiring** | DuPont Jumper Wires / Breadboard | For SPI bus and control pin interconnections |
+| **Main Display (Display 1)** | ILI9341 2.8" SPI TFT LCD (320x240) | Renders Spotify UI, track info, progress bar, audio EQ visualizer & 3-line Karaoke lyrics |
+| **Secondary Display (Display 2)** | ST7735 1.44" / 1.8" SPI TFT LCD (160x128) | Renders rotating 76px vinyl record with decoded album cover art OR full square cover |
+| **Control Buttons** | 3x Tactile Push Buttons | Hardware buttons for Play/Pause, Skip Next, and Skip Previous track controls |
+| **Power Supply** | USB Type-C Cable (5V / 1A+) | Powers the ESP32-S3 board, displays, and control logic |
+| **Wiring** | DuPont Jumper Wires / Breadboard | For SPI bus, control pins, and button interconnections |
 
 ---
 
 ## Features
 
 - **Dual Display Architecture**: Driven over a shared SPI bus using chip-select multiplexing.
-  - **ILI9341 (320x240)**: Main display showing track name, artist, progress bar, audio EQ visualizer, and 3-line synced karaoke lyrics.
-  - **ST7735 (160x128)**: Secondary display featuring a rotating 76px vinyl record with decoded album cover art and song title marquee.
+  - **ILI9341 (320x240 Main Screen)**: Track title, artist name, progress bar with elapsed/duration time, dynamic audio EQ visualizer, and 3-line synced karaoke lyrics.
+  - **ST7735 (160x128 Secondary Screen)**: Supports 2 display modes:
+    - *Spinning Vinyl Mode*: Rotating 76px vinyl disc with album cover center label.
+    - *Full Cover Mode*: Full-screen 108x108 square album cover art.
+- **Physical Button Control**: 3 hardware push buttons with non-blocking software debouncing for instant playback control (Play/Pause, Skip Next, Skip Previous).
+- **On-Device Web Control Dashboard**: When connected to Wi-Fi, access `http://spotify-monitor.local` (mDNS) or the device's IP address from any browser to:
+  - Remotely control Spotify playback (Play/Pause, Skip Next, Skip Previous).
+  - Customize UI Accent Color themes (Spotify Green, Cyan, Gold, Purple, Orange, White).
+  - Toggle Display Modes (Spinning Vinyl vs Full Square Cover).
+  - Toggle Audio EQ visualizer on/off.
+  - Reset saved Wi-Fi & Spotify credentials.
+- **Captive Portal AP Setup Manager**: On first boot (or if Wi-Fi fails), ESP32 launches an Access Point (`ESP32-Spotify-Config`) with a captive portal web setup interface to easily configure Wi-Fi and Spotify credentials without re-flashing the firmware. Credentials are saved permanently in ESP32 NVS (Non-Volatile Storage).
 - **Dual-Core FreeRTOS Multitasking**:
-  - **Core 0**: Asynchronous network tasks (Spotify OAuth2 token refresh, HTTPS album cover downloads, LRCLIB API queries).
-  - **Core 1**: Real-time smooth UI rendering, time interpolation, and vinyl rotation math.
-- **Synced Lyrics Engine**: 6-tier fallback fetcher powered by LRCLIB API. Includes Vietnamese accent removal and K-Pop Hangul-to-Romaja Latin converter.
+  - **Core 0**: Asynchronous network tasks (Spotify OAuth2 token refresh, HTTPS album cover downloads, LRCLIB API queries, Web Dashboard server, Spotify API commands).
+  - **Core 1**: Real-time smooth UI rendering, time interpolation, vinyl rotation math, and button debouncing.
+- **Synced Lyrics Engine**: 6-tier fallback fetcher powered by LRCLIB API. Includes automatic Vietnamese accent removal and K-Pop Hangul-to-Romaja Latin converter.
 - **Memory Efficient**: Direct JPEG scaling and custom line-by-line RGB bitmap rendering into micro-buffers to prevent RAM overflow.
 
 ---
@@ -59,6 +70,13 @@ Both TFT displays share the hardware SPI data lines (`SCLK` and `MOSI`) as well 
 | **3.3V** | Power | `VCC` & `LED` (Backlight) |
 | **GND** | Ground | `GND` |
 
+### Physical Control Buttons
+| ESP32-S3 Pin | Function | Button Connection |
+| :--- | :--- | :--- |
+| **GPIO 4** | Play / Pause Toggle | Push button to GND (`INPUT_PULLUP`) |
+| **GPIO 5** | Skip Next Track | Push button to GND (`INPUT_PULLUP`) |
+| **GPIO 6** | Skip Previous Track | Push button to GND (`INPUT_PULLUP`) |
+
 ---
 
 ## Customizing GPIO Pins
@@ -79,30 +97,57 @@ If you want to use different GPIO pins on your ESP32-S3 board, open [`include/co
 #define TFT2_CS   12  // Secondary display Chip Select
 #define TFT2_DC   11  // Shared DC/A0 pin with TFT1_DC
 #define TFT2_RST  10  // Shared RST pin with TFT1_RST
+
+// Physical Control Buttons
+#define BUTTON_PLAY_PAUSE_PIN 4  // Play / Pause toggle
+#define BUTTON_NEXT_PIN       5  // Skip Next track
+#define BUTTON_PREV_PIN       6  // Skip Previous track
 ```
 
 ---
 
-## Configuration (WiFi & Spotify Credentials)
+## Configuration & Setup
 
-Before compiling the firmware, update your credentials in [`src/globals.cpp`](src/globals.cpp):
+### Method 1: On-Device Web Captive Portal (Recommended)
+1. Power on the device. If no Wi-Fi credentials are saved, it creates a Wi-Fi Access Point named **`ESP32-Spotify-Config`**.
+2. Connect your phone or laptop to `ESP32-Spotify-Config`.
+3. A captive portal page will open automatically (or navigate to `192.168.4.1`).
+4. Enter your Wi-Fi SSID, Password, Spotify Client ID, Client Secret, and Refresh Token.
+5. Click **Save & Restart**. The credentials are stored permanently in ESP32 NVS.
+
+### Method 2: Manual Credentials in Code
+Before compiling the firmware, you can also set credentials directly in [`src/globals.cpp`](src/globals.cpp):
 
 ```cpp
 // WiFi Configuration
-const char* ssid                  = "YOUR_WIFI_SSID";
-const char* password              = "YOUR_WIFI_PASSWORD";
+String ssid                  = "YOUR_WIFI_SSID";
+String password              = "YOUR_WIFI_PASSWORD";
 
 // Spotify Developer Credentials
-const char* spotify_client_id     = "YOUR_SPOTIFY_CLIENT_ID";
-const char* spotify_client_secret = "YOUR_SPOTIFY_CLIENT_SECRET";
-const char* spotify_refresh_token = "YOUR_SPOTIFY_REFRESH_TOKEN";
+String spotify_client_id     = "YOUR_SPOTIFY_CLIENT_ID";
+String spotify_client_secret = "YOUR_SPOTIFY_CLIENT_SECRET";
+String spotify_refresh_token = "YOUR_SPOTIFY_REFRESH_TOKEN";
 ```
 
 ### How to get Spotify Credentials:
 1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard) and create an App.
 2. Obtain your **Client ID** and **Client Secret**.
 3. Set `http://localhost:8888/callback` as a Redirect URI in your app settings.
-4. Generate a **Refresh Token** with the `user-read-currently-playing` and `user-read-playback-state` scopes.
+4. Generate a **Refresh Token** with `user-read-currently-playing`, `user-read-playback-state`, and `user-modify-playback-state` scopes.
+
+---
+
+## Web Control Dashboard
+
+Once connected to Wi-Fi, open any web browser on your network and navigate to:
+- **`http://spotify-monitor.local`** (mDNS) or the device's IP address.
+
+From the web dashboard, you can:
+- **Remote Control Playback**: Play/Pause, Skip Next, Skip Previous.
+- **Theme Color Customization**: Select accent colors (Spotify Green, Cyan, Gold, Purple, Orange, White).
+- **Display Mode**: Switch Display 2 between Rotating Vinyl Disc and Full Square Album Cover.
+- **Visualizer**: Toggle Audio EQ Visualizer ON / OFF.
+- **Wi-Fi Reset**: Wipe stored NVS credentials to re-enter setup mode.
 
 ---
 
@@ -111,7 +156,7 @@ const char* spotify_refresh_token = "YOUR_SPOTIFY_REFRESH_TOKEN";
 1. Install **Visual Studio Code** and the **PlatformIO IDE** extension.
 2. Clone or download this repository.
 3. Open the project folder in PlatformIO.
-4. Fill in your WiFi & Spotify credentials in `src/globals.cpp`.
+4. Set up credentials via Web Captive Portal or `src/globals.cpp`.
 5. Connect your ESP32-S3 board via USB.
 6. Click **Build** (`✓`) and **Upload** (`→`) in PlatformIO.
 
@@ -121,21 +166,25 @@ const char* spotify_refresh_token = "YOUR_SPOTIFY_REFRESH_TOKEN";
 
 ```text
 ├── include/
-│   ├── config.h            # Pinout definitions & Spotify color palette
-│   ├── globals.h           # Global state variables & structs
-│   ├── display_manager.h   # Vinyl rotation & Spotify logo header
-│   ├── lyrics_manager.h    # LRCLIB API lyrics fetcher & parser
-│   ├── spotify_client.h    # Spotify API & HTTPS cover downloader
+│   ├── button_manager.h    # Physical GPIO button handling & debouncing
+│   ├── config.h            # Pinout definitions, Spotify colors & parameters
+│   ├── config_manager.h    # NVS storage, Captive Portal AP & Web Dashboard
+│   ├── display_manager.h   # Vinyl rotation math & Spotify header logo
+│   ├── globals.h           # Global state variables, mutexes & structs
+│   ├── lyrics_manager.h    # LRCLIB API lyrics fetcher & text converters
+│   ├── spotify_client.h    # Spotify HTTPS API, tokens & cover downloader
 │   ├── spotify_logo.h      # PROGMEM logo bitmaps
-│   └── ui_renderer.h       # UI rendering logic for both screens
+│   └── ui_renderer.h       # UI rendering loops for ILI9341 & ST7735
 ├── src/
-│   ├── globals.cpp         # Wifi/Spotify credentials & state init
+│   ├── button_manager.cpp  # Debounced button interrupt & command dispatch
+│   ├── config_manager.cpp  # WebServer endpoints, Captive Portal & NVS
 │   ├── display_manager.cpp # Vinyl disc buffer processing
+│   ├── globals.cpp         # System credentials, state initialization
 │   ├── lyrics_manager.cpp  # LRC parser & K-Pop/Vietnamese text converter
-│   ├── main.cpp            # setup() and loop() entry point
-│   ├── spotify_client.cpp  # Network task & HTTPS API calls
-│   └── ui_renderer.cpp     # Screen 1 & Screen 2 rendering loops
-├── platformio.ini          # PlatformIO build & library config
+│   ├── main.cpp            # Core 0 / Core 1 FreeRTOS setup & loop entry
+│   ├── spotify_client.cpp  # Network task & Spotify REST API calls
+│   └── ui_renderer.cpp     # Dual screen rendering implementation
+├── platformio.ini          # PlatformIO build configuration & libraries
 ├── .gitignore              # Git ignore rules
 └── README.md               # Documentation
 ```
