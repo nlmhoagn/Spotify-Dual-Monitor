@@ -13,6 +13,9 @@ void downloadCoverImageToRAM(String imageUrl);
 // Spotify Player Currently Playing API
 bool getCurrentlyPlaying();
 
+// Spotify Player Control API (Pause, Play, Next, Prev)
+bool sendSpotifyPlayerCommand(PlayerCommand cmd);
+
 // Background Network Task on Core 0
 void spotifyNetworkTask(void *pvParameters);
 

@@ -129,3 +129,17 @@ void renderRotatedVinylDisc(float angle) {
 
   digitalWrite(TFT2_CS, HIGH);
 }
+
+void renderSquareAlbumCover() {
+  if (!labelBufferValid) prepareFallbackLabelBuffer();
+
+  digitalWrite(TFT1_CS, HIGH);
+  digitalWrite(TFT2_CS, LOW);
+
+  for (int y = 0; y < 75; y++) {
+    tft2.drawRGBBitmap(42, 21 + y, &tempCover75[y * 75], 75, 1);
+  }
+
+  digitalWrite(TFT2_CS, HIGH);
+}
+

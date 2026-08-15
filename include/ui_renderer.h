@@ -19,4 +19,7 @@ void updateScreen2Dynamic();
 // Loading screen while connecting to WiFi
 void runLoadingScreen();
 
+// Config Portal AP UI for ILI9341 display
+void renderConfigModeUI(const String& apSSID, const String& ipAddr);
+
 #endif // UI_RENDERER_H

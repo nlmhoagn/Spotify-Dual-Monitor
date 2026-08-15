@@ -22,24 +22,26 @@ void renderAlbumCoverOnCore1() {
   if (renderNow) {
     digitalWrite(TFT1_CS, HIGH);
     digitalWrite(TFT2_CS, LOW);
-    tft2.fillScreen(ST77XX_BLACK);
 
-    // 1. Small display header: DARK background + NOW PLAYING (left) + username (right)
-    tft2.fillRect(0, 0, 160, 18, DARK);
-    tft2.setTextSize(1);
-    tft2.setTextColor(SPGREEN, DARK);
-    tft2.setCursor(6, 5);
-    tft2.print("NOW PLAYING");
+    static bool header_drawn = false;
+    if (!header_drawn) {
+      header_drawn = true;
+      tft2.fillRect(0, 0, 160, 18, DARK);
+      tft2.setTextSize(1);
+      tft2.setTextColor(SPGREEN, DARK);
+      tft2.setCursor(6, 5);
+      tft2.print("NOW PLAYING");
 
-    tft2.setTextSize(1);
-    tft2.setTextColor(0x7BEF, DARK);
-    tft2.setCursor(100, 5);
-    tft2.print("@nlmhoagn");
+      tft2.setTextSize(1);
+      tft2.setTextColor(0x7BEF, DARK);
+      tft2.setCursor(100, 5);
+      tft2.print("@nlmhoagn");
+    }
 
-    // 2. Clear vinyl area before drawing
-    tft2.fillRect(40, 20, 80, 78, ST77XX_BLACK);
+    // 1. Clear artist text area
+    tft2.fillRect(0, 108, 160, 14, ST77XX_BLACK);
 
-    // 3. Decode & store Album Cover into circular Vinyl Label (Center X: 80, Y: 58)
+    // 2. Decode & store Album Cover into circular Vinyl Label (Center X: 80, Y: 58)
     if (localBuffer.size() > 1000) {
       TJpgDec.setJpgScale(4);
       TJpgDec.setSwapBytes(false);
@@ -50,7 +52,11 @@ void renderAlbumCoverOnCore1() {
       prepareFallbackLabelBuffer();
     }
 
-    renderRotatedVinylDisc(0.0f);
+    if (vinyl_render_mode == 0) {
+      renderRotatedVinylDisc(0.0f);
+    } else {
+      renderSquareAlbumCover();
+    }
 
     digitalWrite(TFT1_CS, HIGH);
     digitalWrite(TFT2_CS, LOW);
@@ -68,14 +74,14 @@ void renderAlbumCoverOnCore1() {
 
     tft2.getTextBounds(artistName.c_str(), 0, 0, &x1, &y1, &w, &h);
     int aX = (160 - w) / 2; if (aX < 2) aX = 2;
-    tft2.setTextColor(SPGREEN, ST77XX_BLACK);
+    tft2.setTextColor(theme_accent_color, ST77XX_BLACK);
     tft2.setCursor(aX, 111);
     tft2.print(artistName);
 
     tft2.drawFastHLine(10, 123, 140, 0x3333);
 
     digitalWrite(TFT2_CS, HIGH);
-    Serial.println("[COVER] Rendered 75x75 centered cover + UI safely on Core 1!");
+    Serial.println("[COVER] Rendered centered cover + UI safely on Core 1!");
   }
 }
 
@@ -103,7 +109,7 @@ void updateScreen2Dynamic() {
       tft2.setCursor(52, 101);
       tft2.print("Loading...");
 
-      tft2.setTextColor(SPGREEN, ST77XX_BLACK);
+      tft2.setTextColor(theme_accent_color, ST77XX_BLACK);
       tft2.setCursor(40, 111);
       tft2.print("Fetching cover");
 
@@ -119,12 +125,16 @@ void updateScreen2Dynamic() {
     loading_angle += 0.05f;
     if (loading_angle >= 6.28318f) loading_angle -= 6.28318f;
     prepareFallbackLabelBuffer();
-    renderRotatedVinylDisc(loading_angle);
+    if (vinyl_render_mode == 0) {
+      renderRotatedVinylDisc(loading_angle);
+    } else {
+      renderSquareAlbumCover();
+    }
 
     static int loadPulse = 0;
     loadPulse = (loadPulse + 4) % 140;
     tft2.drawFastHLine(10, 123, 140, 0x2222);
-    tft2.drawFastHLine(10 + (loadPulse % 100), 123, 40, SPGREEN);
+    tft2.drawFastHLine(10 + (loadPulse % 100), 123, 40, theme_accent_color);
 
     digitalWrite(TFT2_CS, HIGH);
     return;
@@ -144,7 +154,7 @@ void updateScreen2Dynamic() {
     if (fill != prev_fill2) {
       prev_fill2 = fill;
       tft2.drawFastHLine(10, 123, 140, 0x2222);
-      if (fill > 0) tft2.drawFastHLine(10, 123, fill, SPGREEN);
+      if (fill > 0) tft2.drawFastHLine(10, 123, fill, theme_accent_color);
     }
   }
 
@@ -195,15 +205,30 @@ void updateScreen2Dynamic() {
     }
   }
 
+  static uint8_t prev_mode = 255;
+  if (vinyl_render_mode != prev_mode) {
+    prev_mode = vinyl_render_mode;
+    digitalWrite(TFT1_CS, HIGH);
+    digitalWrite(TFT2_CS, LOW);
+    tft2.fillRect(0, 18, 160, 82, ST77XX_BLACK);
+    digitalWrite(TFT2_CS, HIGH);
+  }
+
   static float vinyl_angle = 0.0f;
-  if (playing) {
-    vinyl_angle += 0.04f;
-    if (vinyl_angle >= 6.28318f) vinyl_angle -= 6.28318f;
-    renderRotatedVinylDisc(vinyl_angle);
+  if (playing || vinyl_render_mode == 1) {
+    if (vinyl_render_mode == 0) {
+      if (playing) {
+        vinyl_angle += 0.04f;
+        if (vinyl_angle >= 6.28318f) vinyl_angle -= 6.28318f;
+      }
+      renderRotatedVinylDisc(vinyl_angle);
+    } else {
+      renderSquareAlbumCover();
+    }
   }
 
   static unsigned long last_eq2 = 0;
-  if (millis() - last_eq2 > 100) {
+  if (eq_enabled && (millis() - last_eq2 > 100)) {
     last_eq2 = millis();
 
     int leftX[4]  = { 8, 15, 22, 29 };
@@ -217,13 +242,13 @@ void updateScreen2Dynamic() {
       if (h != prevH_L[i]) {
         prevH_L[i] = h;
         tft2.fillRect(leftX[i], 35, 4, 55, ST77XX_BLACK);
-        if (h > 0) tft2.fillRoundRect(leftX[i], 90 - h, 4, h, 1, SPGREEN);
+        if (h > 0) tft2.fillRoundRect(leftX[i], 90 - h, 4, h, 1, theme_accent_color);
       }
 
       if (h != prevH_R[i]) {
         prevH_R[i] = h;
         tft2.fillRect(rightX[i], 35, 4, 55, ST77XX_BLACK);
-        if (h > 0) tft2.fillRoundRect(rightX[i], 90 - h, 4, h, 1, SPGREEN);
+        if (h > 0) tft2.fillRoundRect(rightX[i], 90 - h, 4, h, 1, theme_accent_color);
       }
     }
   }
@@ -243,7 +268,7 @@ void drawHeader() {
   tft1.setCursor(34, 8);
   tft1.print("SPOTIFY");
 
-  tft1.setTextColor(SPGREEN, DARK);
+  tft1.setTextColor(theme_accent_color, DARK);
   tft1.setCursor(34, 18);
   tft1.print("Now Playing");
 
@@ -285,7 +310,7 @@ void drawSongInfoTop() {
     artistY = 72;
   }
 
-  tft1.setTextColor(SPGREEN, BG);
+  tft1.setTextColor(theme_accent_color, BG);
   tft1.setTextSize(1);
   tft1.setCursor(14, artistY);
   String cleanArtist = removeVietnameseAccents(current_artist_name);
@@ -294,6 +319,8 @@ void drawSongInfoTop() {
 }
 
 void updateEQ() {
+  if (!eq_enabled) return;
+
   unsigned long now = millis();
   if (now - last_eq_update < 40) return;
   last_eq_update = now;
@@ -314,7 +341,7 @@ void updateEQ() {
       if (eqH[i] > eqT[i]) eqH[i] -= 4;
       if (eqH[i] < 3) eqH[i] = 3;
 
-      tft1.fillRoundRect(bx, eqY - eqH[i], bw, eqH[i], 2, SPGREEN);
+      tft1.fillRoundRect(bx, eqY - eqH[i], bw, eqH[i], 2, theme_accent_color);
     }
   }
 }
@@ -342,7 +369,7 @@ void updateProgressUI() {
 
     tft1.fillRoundRect(x, y, w, 3, 1, DGRAY);
     if (fill > 0) {
-      tft1.fillRoundRect(x, y, fill, 3, 1, SPGREEN);
+      tft1.fillRoundRect(x, y, fill, 3, 1, theme_accent_color);
     }
 
     tft1.fillCircle(knobX, y + 1, 4, WHITE);
@@ -394,7 +421,41 @@ void updateScreen1() {
   bool is_playing_snap = is_playing;
   xSemaphoreGive(dataMutex);
 
-  if (track_name_snap == "") return;
+  static bool offline_rendered = false;
+
+  if (track_name_snap == "") {
+    if (!offline_rendered) {
+      offline_rendered = true;
+      digitalWrite(TFT2_CS, HIGH);
+      digitalWrite(TFT1_CS, LOW);
+
+      tft1.fillScreen(BG);
+      drawSpotifyLogo(tft1, 160, 60, 30, BG);
+
+      tft1.setTextSize(2);
+      tft1.setTextColor(theme_accent_color, BG);
+      tft1.setCursor(80, 110);
+      tft1.print("SPOTIFY PLAYER");
+
+      tft1.setTextSize(1);
+      tft1.setTextColor(WHITE, BG);
+      tft1.setCursor(45, 145);
+      if (WiFi.status() == WL_CONNECTED) {
+        tft1.print("Connected! Play a song on Spotify...");
+      } else {
+        tft1.print("WiFi Not Connected. Update credentials in globals.cpp");
+      }
+
+      tft1.drawFastHLine(40, 170, 240, DGRAY);
+      tft1.setTextColor(LGRAY, BG);
+      tft1.setCursor(95, 185);
+
+      digitalWrite(TFT1_CS, HIGH);
+    }
+    return;
+  }
+
+  offline_rendered = false;
 
   digitalWrite(TFT2_CS, HIGH);
   digitalWrite(TFT1_CS, LOW);
@@ -451,7 +512,7 @@ void runLoadingScreen() {
   tft1.print("SPOTIFY");
 
   tft1.setTextSize(1);
-  tft1.setTextColor(SPGREEN, BG);
+  tft1.setTextColor(theme_accent_color, BG);
   tft1.setCursor(110, 148);
   tft1.print("Connecting WiFi..");
 
@@ -470,7 +531,7 @@ void runLoadingScreen() {
   tft2.print("SPOTIFY");
 
   tft2.setTextSize(1);
-  tft2.setTextColor(SPGREEN, ST77XX_BLACK);
+  tft2.setTextColor(theme_accent_color, ST77XX_BLACK);
   tft2.setCursor(34, 78);
   tft2.print("Connecting WiFi..");
 
@@ -484,15 +545,80 @@ void runLoadingScreen() {
 
     digitalWrite(TFT2_CS, HIGH);
     digitalWrite(TFT1_CS, LOW);
-    tft1.fillRoundRect(101, 169, filled1, 4, 1, SPGREEN);
+    tft1.fillRoundRect(101, 169, filled1, 4, 1, theme_accent_color);
     digitalWrite(TFT1_CS, HIGH);
 
     digitalWrite(TFT1_CS, HIGH);
     digitalWrite(TFT2_CS, LOW);
-    tft2.fillRoundRect(36, 95, filled2, 4, 1, SPGREEN);
+    tft2.fillRoundRect(36, 95, filled2, 4, 1, theme_accent_color);
     digitalWrite(TFT2_CS, HIGH);
 
     delay(200);
     attempts++;
   }
 }
+
+void renderConfigModeUI(const String& apSSID, const String& ipAddr) {
+  digitalWrite(TFT2_CS, HIGH);
+  digitalWrite(TFT1_CS, LOW);
+
+  tft1.fillScreen(BG);
+  drawSpotifyLogo(tft1, 160, 40, 24, BG);
+
+  tft1.setTextSize(2);
+  tft1.setTextColor(theme_accent_color, BG);
+  tft1.setCursor(50, 75);
+  tft1.print("SPOTIFY SETUP MODE");
+
+  tft1.drawFastHLine(30, 98, 260, theme_accent_color);
+
+  tft1.setTextSize(1);
+  tft1.setTextColor(WHITE, BG);
+  tft1.setCursor(20, 112);
+  tft1.print("1. Connect your phone/PC WiFi to AP:");
+
+  tft1.setTextSize(1);
+  tft1.setTextColor(theme_accent_color, BG);
+  tft1.setCursor(35, 130);
+  tft1.print(apSSID);
+
+  tft1.setTextSize(1);
+  tft1.setTextColor(WHITE, BG);
+  tft1.setCursor(20, 155);
+  tft1.print("2. Open web browser & navigate to IP:");
+
+  tft1.setTextSize(2);
+  tft1.setTextColor(theme_accent_color, BG);
+  tft1.setCursor(85, 172);
+  tft1.print(ipAddr);
+
+  tft1.setTextSize(1);
+  tft1.setTextColor(LGRAY, BG);
+  tft1.setCursor(30, 208);
+  tft1.print("Fill WiFi & Spotify keys, then Save!");
+
+  digitalWrite(TFT1_CS, HIGH);
+
+  // Secondary display info
+  digitalWrite(TFT1_CS, HIGH);
+  digitalWrite(TFT2_CS, LOW);
+
+  tft2.fillScreen(ST77XX_BLACK);
+  drawSpotifyLogo(tft2, 80, 30, 14, ST77XX_BLACK);
+
+  tft2.setTextSize(1);
+  tft2.setTextColor(theme_accent_color, ST77XX_BLACK);
+  tft2.setCursor(45, 55);
+  tft2.print("SETUP MODE");
+
+  tft2.setTextColor(WHITE, ST77XX_BLACK);
+  tft2.setCursor(15, 75);
+  tft2.print("WiFi AP Active");
+
+  tft2.setTextColor(LGRAY, ST77XX_BLACK);
+  tft2.setCursor(15, 95);
+  tft2.print("192.168.4.1");
+
+  digitalWrite(TFT2_CS, HIGH);
+}
+

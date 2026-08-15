@@ -9,20 +9,11 @@
 #include "lyrics_manager.h"
 #include "spotify_client.h"
 #include "ui_renderer.h"
-#include "button_manager.h"
-#include "config_manager.h"
 
 // -------------------------------------------------------------
 // SYSTEM INITIALIZATION (CORE 1 - SPOTIFY DUAL MONITOR)
 // -------------------------------------------------------------
 void setup() {
-
-  #ifdef RGB_BUILTIN
-    neopixelWrite(RGB_BUILTIN, 0, 0, 0);
-  #else
-    neopixelWrite(48, 0, 0, 0);
-  #endif
-  
   Serial.begin(115200);
   delay(500);
 
@@ -31,15 +22,6 @@ void setup() {
   Serial.println("==========================================");
 
   dataMutex = xSemaphoreCreateMutex();
-
-  // Initialize physical control buttons (INPUT_PULLUP)
-  initButtons();
-
-  // Check if Play/Pause button (GPIO 4) is held down at startup -> Force Config Portal
-  bool force_config = (digitalRead(BUTTON_PLAY_PAUSE_PIN) == LOW);
-  if (force_config) {
-    Serial.println("[BOOT] PLAY/PAUSE button held during boot! Forcing Setup Mode...");
-  }
 
   // 1. Configure CS & Control Pins
   pinMode(TFT1_CS, OUTPUT);
@@ -63,7 +45,7 @@ void setup() {
   digitalWrite(TFT1_CS, HIGH);
   digitalWrite(TFT2_CS, LOW);
   tft2.initR(INITR_BLACKTAB);
-  tft2.setRotation(3);
+  tft2.setRotation(1);
   digitalWrite(TFT2_CS, HIGH);
 
   // 5. Initialize ILI9341 (Display 1 - Spotify UI / Lyrics) SECOND
@@ -82,21 +64,12 @@ void setup() {
     eqT[i] = random(4, 18);
   }
 
-  // Load credentials from NVS (Flash)
-  bool has_credentials = loadCredentialsFromNVS();
+  WiFi.begin(ssid, password);
+  runLoadingScreen();
 
-  if (!force_config && has_credentials) {
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(ssid.c_str(), password.c_str());
-    runLoadingScreen();
-  }
-
-  if (!force_config && WiFi.status() == WL_CONNECTED) {
-    Serial.println("\n[WIFI] Connected successfully!");
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n[WIFI] Connected!");
     refreshSpotifyToken();
-
-    // Start Always-On Web Dashboard (accessible via Home Wi-Fi & spotify-display.local)
-    startWebDashboard();
 
     // Initialize background Spotify network task on Core 0
     xTaskCreatePinnedToCore(
@@ -109,9 +82,7 @@ void setup() {
       0
     );
   } else {
-    Serial.println("\n[WIFI] WiFi not connected or Config Mode requested. Launching Setup Portal...");
-    startConfigPortal();
-    renderConfigModeUI("Spotify-Display-Setup", "192.168.4.1");
+    Serial.println("\n[WIFI] Not connected. Running offline/waiting UI...");
   }
 }
 
@@ -119,18 +90,6 @@ void setup() {
 // MAIN LOOP (CORE 1 RENDERS BOTH DISPLAYS SMOOTHLY)
 // -------------------------------------------------------------
 void loop() {
-  if (in_config_mode) {
-    handleConfigPortal();
-    delay(5);
-    return;
-  }
-
-  // Handle Always-On Web Dashboard requests on Home Wi-Fi
-  handleWebDashboard();
-
-  // 0. Check physical button states (non-blocking debounce)
-  handleButtons();
-
   unsigned long now = millis();
 
   // 1. Smooth playback time interpolation on Core 1

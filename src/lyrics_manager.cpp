@@ -301,6 +301,58 @@ void parseLRC(const char* lrcContent) {
   Serial.printf("[LYRICS] Parsed & sorted %d lines!\n", lyrics_count);
 }
 
+String extractSyncedLyrics(const String& payload, int startFromIndex = 0, int* nextIndex = nullptr) {
+  if (nextIndex) *nextIndex = -1;
+  int keyIdx = payload.indexOf("\"syncedLyrics\":", startFromIndex);
+  if (keyIdx == -1) {
+    keyIdx = payload.indexOf("\"syncedLyrics\" :", startFromIndex);
+  }
+  if (keyIdx == -1) return "";
+
+  int valIdx = keyIdx + 15;
+  while (valIdx < (int)payload.length() &&
+        (payload[valIdx] == ' ' || payload[valIdx] == '\t' || payload[valIdx] == '\r' || payload[valIdx] == '\n')) {
+    valIdx++;
+  }
+
+  if (valIdx >= (int)payload.length() || payload[valIdx] != '"') {
+    if (nextIndex) *nextIndex = valIdx + 4;
+    return "";
+  }
+
+  int startQuote = valIdx;
+  String result = "";
+  result.reserve(4096);
+
+  size_t len = payload.length();
+  size_t i = startQuote + 1;
+  while (i < len) {
+    char c = payload[i];
+    if (c == '\\' && i + 1 < len) {
+      char nextChar = payload[i + 1];
+      if (nextChar == 'n') { result += '\n'; i += 2; }
+      else if (nextChar == 'r') { result += '\r'; i += 2; }
+      else if (nextChar == 't') { result += '\t'; i += 2; }
+      else if (nextChar == '"') { result += '"'; i += 2; }
+      else if (nextChar == '\\') { result += '\\'; i += 2; }
+      else if (nextChar == '/') { result += '/'; i += 2; }
+      else {
+        result += c;
+        i++;
+      }
+    } else if (c == '"') {
+      if (nextIndex) *nextIndex = (int)i + 1;
+      return result;
+    } else {
+      result += c;
+      i++;
+    }
+  }
+
+  if (nextIndex) *nextIndex = (int)len;
+  return result;
+}
+
 bool fetchSingleLyrics(String url) {
   WiFiClientSecure c;
   c.setInsecure();
@@ -323,19 +375,9 @@ bool fetchSingleLyrics(String url) {
 
   if (payload.length() < 20) return false;
 
-  StaticJsonDocument<32> filter;
-  filter["syncedLyrics"] = true;
-
-  DynamicJsonDocument doc(4096);
-  DeserializationError err = deserializeJson(doc, payload, DeserializationOption::Filter(filter));
-  if (err) {
-    Serial.printf("[LRC-GET] JSON err: %s\n", err.c_str());
-    return false;
-  }
-
-  const char* lrc = doc["syncedLyrics"];
-  if (lrc && strlen(lrc) > 10) {
-    parseLRC(lrc);
+  String lrc = extractSyncedLyrics(payload);
+  if (lrc.length() > 10) {
+    parseLRC(lrc.c_str());
     return true;
   }
 
@@ -365,25 +407,17 @@ bool fetchSearchLyrics(String url) {
 
   if (payload.length() < 20) return false;
 
-  StaticJsonDocument<48> searchFilter;
-  searchFilter[0]["syncedLyrics"] = true;
-
-  DynamicJsonDocument doc(8192);
-  DeserializationError err = deserializeJson(doc, payload, DeserializationOption::Filter(searchFilter));
-  if (err) {
-    Serial.printf("[LRC-SRCH] JSON err: %s\n", err.c_str());
-    return false;
-  }
-
-  if (!doc.is<JsonArray>()) return false;
-
-  for (JsonObject obj : doc.as<JsonArray>()) {
-    const char* lrc = obj["syncedLyrics"];
-    if (lrc && strlen(lrc) > 10) {
-      Serial.println("[LRC-SRCH] Found syncedLyrics directly from search array!");
-      parseLRC(lrc);
+  int currIdx = 0;
+  while (currIdx < (int)payload.length()) {
+    int nextIdx = -1;
+    String lrc = extractSyncedLyrics(payload, currIdx, &nextIdx);
+    if (lrc.length() > 10) {
+      Serial.println("[LRC-SRCH] Found syncedLyrics directly from search payload!");
+      parseLRC(lrc.c_str());
       return true;
     }
+    if (nextIdx == -1 || nextIdx <= currIdx) break;
+    currIdx = nextIdx;
   }
 
   Serial.println("[LRC-SRCH] No syncedLyrics in search result array");

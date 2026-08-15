@@ -1,10 +1,10 @@
-# 🎵 ESP32-S3 Spotify Dual-Monitor & Karaoke Lyrics Player
+# ESP32-S3 Spotify Dual-Monitor & Karaoke Lyrics Player
 
 A feature-rich, dual-display Spotify music player powered by ESP32-S3 and FreeRTOS. It streams real-time Spotify playback status, renders live synced Karaoke lyrics on a main ILI9341 display, and displays a rotating vinyl album cover on a secondary ST7735 display.
 
 ---
 
-## 🧰 Hardware & Components Required
+## Hardware & Components Required
 
 | Component | Model / Specification | Description |
 | :--- | :--- | :--- |
@@ -16,7 +16,7 @@ A feature-rich, dual-display Spotify music player powered by ESP32-S3 and FreeRT
 
 ---
 
-## ✨ Features
+## Features
 
 - **Dual Display Architecture**: Driven over a shared SPI bus using chip-select multiplexing.
   - **ILI9341 (320x240)**: Main display showing track name, artist, progress bar, audio EQ visualizer, and 3-line synced karaoke lyrics.
@@ -29,59 +29,61 @@ A feature-rich, dual-display Spotify music player powered by ESP32-S3 and FreeRT
 
 ---
 
-## 🔌 Hardware Pinout & Wiring Diagram
+## Hardware Pinout & Wiring Diagram
 
-Both TFT displays share the hardware SPI data lines (`SCLK` and `MOSI`), while using independent Chip Select (`CS`), Data/Command (`DC`), and Reset (`RST`) control pins.
+Both TFT displays share the hardware SPI data lines (`SCLK` and `MOSI`) as well as the `DC` (Data/Command) and `RST` (Reset) control pins, while using independent Chip Select (`CS`) pins (`GPIO 15` for Display 1 and `GPIO 12` for Display 2).
 
-### Shared SPI Pins
+### Shared SPI & Control Pins
 | ESP32-S3 Pin | Function | Display Pins |
 | :--- | :--- | :--- |
 | **GPIO 8** | `SPI_SCLK` (Clock) | `SCK` / `SCL` / `CLK` on both displays |
 | **GPIO 9** | `SPI_MOSI` (Master Out Slave In) | `SDA` / `MOSI` on both displays |
+| **GPIO 11** | `TFT_DC` (Data / Command) | `DC` / `RS` / `A0` on both displays |
+| **GPIO 10** | `TFT_RST` (Reset) | `RST` / `RESET` on both displays |
 
 ### Display 1: Main Display (ILI9341 320x240)
 | ESP32-S3 Pin | Function | ILI9341 Pin |
 | :--- | :--- | :--- |
-| **GPIO 12** | `TFT1_CS` | `CS` |
-| **GPIO 11** | `TFT1_DC` | `DC` / `RS` |
-| **GPIO 10** | `TFT1_RST` | `RST` / `RESET` |
+| **GPIO 15** | `TFT1_CS` | `CS` |
+| **GPIO 11** | `TFT1_DC` (Shared) | `DC` / `RS` |
+| **GPIO 10** | `TFT1_RST` (Shared) | `RST` / `RESET` |
 | **3.3V / 5V** | Power | `VCC` & `LED` (Backlight) |
 | **GND** | Ground | `GND` |
 
 ### Display 2: Secondary Display (ST7735 160x128)
 | ESP32-S3 Pin | Function | ST7735 Pin |
 | :--- | :--- | :--- |
-| **GPIO 16** | `TFT2_CS` | `CS` |
-| **GPIO 15** | `TFT2_DC` | `DC` / `A0` |
-| **GPIO 17** | `TFT2_RST` | `RST` / `RESET` |
+| **GPIO 12** | `TFT2_CS` | `CS` |
+| **GPIO 11** | `TFT2_DC` (Shared with Display 1) | `DC` / `A0` |
+| **GPIO 10** | `TFT2_RST` (Shared with Display 1) | `RST` / `RESET` |
 | **3.3V** | Power | `VCC` & `LED` (Backlight) |
 | **GND** | Ground | `GND` |
 
 ---
 
-## 🛠️ Customizing GPIO Pins
+## Customizing GPIO Pins
 
 If you want to use different GPIO pins on your ESP32-S3 board, open [`include/config.h`](include/config.h) and modify the pin macro definitions:
 
 ```cpp
 // SPI Bus (Shared)
-#define SPI_SCLK 8  // Change to your desired SCLK pin
-#define SPI_MOSI 9  // Change to your desired MOSI pin
+#define SPI_SCLK 8  // Shared SCK/SCLK pin
+#define SPI_MOSI 9  // Shared MOSI/SDA pin
 
-// Display 1: ILI9341
-#define TFT1_CS   12  // Main display Chip Select
-#define TFT1_DC   11  // Main display Data/Command
-#define TFT1_RST  10  // Main display Reset
+// Display 1: ILI9341 (320x240 - Main display for Spotify UI)
+#define TFT1_CS   15  // Main display Chip Select
+#define TFT1_DC   11  // Shared DC/RS pin with Display 2
+#define TFT1_RST  10  // Shared RST pin with Display 2
 
-// Display 2: ST7735
-#define TFT2_CS   16  // Secondary display Chip Select
-#define TFT2_DC   15  // Secondary display Data/Command
-#define TFT2_RST  17  // Secondary display Reset
+// Display 2: ST7735 (160x128 - Secondary display for Album Cover)
+#define TFT2_CS   12  // Secondary display Chip Select
+#define TFT2_DC   11  // Shared DC/A0 pin with TFT1_DC
+#define TFT2_RST  10  // Shared RST pin with TFT1_RST
 ```
 
 ---
 
-## ⚙️ Configuration (WiFi & Spotify Credentials)
+## Configuration (WiFi & Spotify Credentials)
 
 Before compiling the firmware, update your credentials in [`src/globals.cpp`](src/globals.cpp):
 
@@ -104,7 +106,7 @@ const char* spotify_refresh_token = "YOUR_SPOTIFY_REFRESH_TOKEN";
 
 ---
 
-## 🚀 Building & Flashing
+## Building & Flashing
 
 1. Install **Visual Studio Code** and the **PlatformIO IDE** extension.
 2. Clone or download this repository.
@@ -115,7 +117,7 @@ const char* spotify_refresh_token = "YOUR_SPOTIFY_REFRESH_TOKEN";
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 ├── include/
@@ -140,6 +142,6 @@ const char* spotify_refresh_token = "YOUR_SPOTIFY_REFRESH_TOKEN";
 
 ---
 
-## 📜 License
+## License
 
 This project is open-source and available under the [MIT License](LICENSE).

@@ -132,7 +132,7 @@ bool getCurrentlyPlaying() {
     filter["item"]["id"] = true;
     filter["item"]["name"] = true;
     filter["item"]["duration_ms"] = true;
-    filter["item"]["artists"][0]["name"] = true;
+    filter["item"]["artists"] = true;
     filter["item"]["album"]["images"] = true;
 
     DynamicJsonDocument doc(4096);
@@ -157,7 +157,17 @@ bool getCurrentlyPlaying() {
     long new_duration_ms = item["duration_ms"].as<long>();
     String new_track_id = item["id"].as<String>();
     String new_track_name = item["name"].as<String>();
-    String new_artist_name = item["artists"][0]["name"].as<String>();
+
+    String new_artist_name = "";
+    if (item["artists"].is<JsonArray>()) {
+      JsonArray artistsArr = item["artists"].as<JsonArray>();
+      for (size_t i = 0; i < artistsArr.size(); i++) {
+        if (i > 0) new_artist_name += ", ";
+        new_artist_name += artistsArr[i]["name"].as<String>();
+      }
+    } else if (!item["artists"][0]["name"].isNull()) {
+      new_artist_name = item["artists"][0]["name"].as<String>();
+    }
 
     String new_cover_url = "";
     if (item["album"]["images"].is<JsonArray>()) {
@@ -187,7 +197,6 @@ bool getCurrentlyPlaying() {
       current_track_name = new_track_name;
       current_artist_name = new_artist_name;
       current_cover_url = new_cover_url;
-      cover_loaded_tft2 = false;
       tft2_title_dirty = true;
 
       lyrics_available = false;
@@ -223,17 +232,150 @@ bool getCurrentlyPlaying() {
 }
 
 // -------------------------------------------------------------
+// SPOTIFY PLAYER CONTROL API (PAUSE, PLAY, SKIP NEXT, SKIP PREV)
+// -------------------------------------------------------------
+bool sendSpotifyPlayerCommand(PlayerCommand cmd) {
+  if (cmd == CMD_NONE || WiFi.status() != WL_CONNECTED) return false;
+
+  if (access_token == "" || millis() >= token_expires_at) {
+    if (!refreshSpotifyToken()) return false;
+  }
+
+  WiFiClientSecure client;
+  client.setInsecure();
+
+  HTTPClient http;
+  http.setTimeout(4000);
+
+  String url = "";
+  String method = "";
+
+  switch (cmd) {
+    case CMD_PAUSE:
+      url = "https://api.spotify.com/v1/me/player/pause";
+      method = "PUT";
+      break;
+
+    case CMD_PLAY:
+      url = "https://api.spotify.com/v1/me/player/play";
+      method = "PUT";
+      break;
+
+    case CMD_PLAY_PAUSE:
+      xSemaphoreTake(dataMutex, portMAX_DELAY);
+      if (is_playing) {
+        url = "https://api.spotify.com/v1/me/player/pause";
+        method = "PUT";
+      } else {
+        url = "https://api.spotify.com/v1/me/player/play";
+        method = "PUT";
+      }
+      xSemaphoreGive(dataMutex);
+      break;
+
+    case CMD_NEXT:
+      url = "https://api.spotify.com/v1/me/player/next";
+      method = "POST";
+      break;
+
+    case CMD_PREV:
+      url = "https://api.spotify.com/v1/me/player/previous";
+      method = "POST";
+      break;
+
+    default:
+      return false;
+  }
+
+  for (int attempt = 0; attempt < 2; attempt++) {
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    HTTPClient http;
+    http.setTimeout(4000);
+
+    http.begin(client, url);
+    http.addHeader("Authorization", "Bearer " + access_token);
+    http.addHeader("Content-Length", "0");
+
+    int httpCode = http.sendRequest(method.c_str(), (uint8_t*)NULL, 0);
+
+    if (httpCode == 204 || httpCode == 200) {
+      Serial.printf("[SPOTIFY CMD] %s success (%d)\n", method.c_str(), httpCode);
+      http.end();
+      client.stop();
+      return true;
+    } else if (httpCode == 401) {
+      http.end();
+      client.stop();
+
+      if (attempt == 0) {
+        Serial.println("[SPOTIFY CMD] 401 Unauthorized -> Refreshing token and retrying once...");
+        refreshSpotifyToken();
+        continue;
+      } else {
+        Serial.println("\n==========================================================================");
+        Serial.println("[SPOTIFY ERROR] 401 UNAUTHORIZED! REFRESH TOKEN LACKS SCOPE PERMISSION.");
+        Serial.println("Your current refresh token only has READ scopes (user-read-currently-playing).");
+        Serial.println("To fix: Generate a new Spotify refresh token with scopes:");
+        Serial.println("  -> user-read-currently-playing user-read-playback-state user-modify-playback-state");
+        Serial.println("Then update 'spotify_refresh_token' in globals.cpp.");
+        Serial.println("==========================================================================\n");
+        return false;
+      }
+    } else {
+      String res = http.getString();
+      if (httpCode == 403) {
+        Serial.printf("[SPOTIFY CMD] 403 Forbidden! Missing 'user-modify-playback-state' scope. Res: %s\n", res.c_str());
+      } else if (httpCode == 404) {
+        Serial.printf("[SPOTIFY CMD] 404 Not Found! No active device found. Open Spotify on phone/PC. Res: %s\n", res.c_str());
+      } else {
+        Serial.printf("[SPOTIFY CMD] Failed HTTP %d: %s\n", httpCode, res.c_str());
+      }
+      http.end();
+      client.stop();
+      return false;
+    }
+  }
+
+  return false;
+}
+
+// -------------------------------------------------------------
 // BACKGROUND NETWORK TASK ON CORE 0 (SPOTIFY API & LYRICS)
 // -------------------------------------------------------------
 void spotifyNetworkTask(void *pvParameters) {
+  unsigned long last_poll_time = 0;
+
   for (;;) {
+    // 1. Check for pending button command immediately (checked every 20ms!)
+    PlayerCommand cmd_to_exec = CMD_NONE;
+    xSemaphoreTake(dataMutex, portMAX_DELAY);
+    if (pending_player_cmd != CMD_NONE) {
+      cmd_to_exec = pending_player_cmd;
+      pending_player_cmd = CMD_NONE;
+    }
+    xSemaphoreGive(dataMutex);
+
+    if (cmd_to_exec != CMD_NONE) {
+      // Execute button command IMMEDIATELY with zero delay!
+      sendSpotifyPlayerCommand(cmd_to_exec);
+      vTaskDelay(50 / portTICK_PERIOD_MS);
+      getCurrentlyPlaying();
+      last_poll_time = millis();
+    } else {
+      // Periodic playback status poll every 2000ms
+      if (last_poll_time == 0 || (millis() - last_poll_time >= 2000)) {
+        getCurrentlyPlaying();
+        last_poll_time = millis();
+      }
+    }
+
     String pending_cover_url = "";
     String pending_track_name = "";
     String pending_artist_name = "";
     long pending_duration_ms = 0;
     bool need_fetch = false;
-
-    getCurrentlyPlaying();
 
     xSemaphoreTake(dataMutex, portMAX_DELAY);
     if (pending_track_change) {
@@ -247,13 +389,14 @@ void spotifyNetworkTask(void *pvParameters) {
     xSemaphoreGive(dataMutex);
 
     if (need_fetch) {
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+      vTaskDelay(50 / portTICK_PERIOD_MS);
       downloadCoverImageToRAM(pending_cover_url);
 
-      vTaskDelay(100 / portTICK_PERIOD_MS);
+      vTaskDelay(50 / portTICK_PERIOD_MS);
       fetchLyrics(pending_track_name, pending_artist_name, pending_duration_ms);
     }
 
-    vTaskDelay(1500 / portTICK_PERIOD_MS);
+    // Short sleep of 20ms so button press response is ultra-fast (< 20ms)
+    vTaskDelay(20 / portTICK_PERIOD_MS);
   }
 }

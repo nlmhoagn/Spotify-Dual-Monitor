@@ -14,8 +14,27 @@ struct LyricLine {
   String text;
 };
 
+// Spotify Player Command Enum
+enum PlayerCommand {
+  CMD_NONE = 0,
+  CMD_PLAY_PAUSE,
+  CMD_PAUSE,
+  CMD_PLAY,
+  CMD_NEXT,
+  CMD_PREV
+};
+
 // Dual-Core Mutex declaration
 extern SemaphoreHandle_t dataMutex;
+
+// Pending Spotify command queue (protected by dataMutex)
+extern PlayerCommand pending_player_cmd;
+
+// System state & UI Settings
+extern bool in_config_mode;
+extern uint16_t theme_accent_color;
+extern uint8_t vinyl_render_mode;
+extern uint8_t eq_enabled;
 
 // TFT Display Objects
 extern Adafruit_ILI9341 tft1;
