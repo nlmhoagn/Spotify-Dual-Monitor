@@ -1,4 +1,4 @@
-# ESP32-S3 Spotify Dual-Monitor & Karaoke Lyrics Player
+# ESP32-S3 Spotify Dual-Monitor & Lyrics Player
 
 A feature-rich, dual-display Spotify music player and smart desktop companion powered by ESP32-S3 and FreeRTOS. It streams real-time Spotify playback status, renders live synced Karaoke lyrics on a main ILI9341 display, displays a rotating vinyl album cover on a secondary ST7735 display, and includes physical button controls, an on-device Web Control Dashboard, and a Captive Portal Wi-Fi setup manager.
 
